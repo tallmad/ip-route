@@ -20,5 +20,5 @@ VPN auto routing scripts - for Mac OS X
 1. Fetch gfw segments
 
     ```shell
-    sudo ./ip-route fetch_gfw_segment
+    ./ip-route fetch_gfw_segment
     ```

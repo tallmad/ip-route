@@ -38,9 +38,9 @@ def _get_array(s):
 
 
 def _get_local_gateway():
-    cmd = r'/usr/sbin/netstat -nr' \
-          r' | grep "^default.*en0"' \
-          r' | sed "s;^default *\([0-9\.]*\) .*$;\1;"'
+    cmd = r'/usr/sbin/netstat -nr | ' \
+          r'grep "^default.*en0" | ' \
+          r'sed "s;^default *\([0-9\.]*\) .*$;\1;"'
     return _exec_cmd(cmd)
 
 
@@ -186,7 +186,7 @@ def ip_fetch_gfw_segment():
     with open(segfile, 'w') as f:
         f.write('\n'.join(results))
 
-    print 'Done...'
+    print 'Done... Save to segment_gfw.'
 
 
 if __name__ == '__main__':

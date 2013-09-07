@@ -1,0 +1,40 @@
+;
+; Configuration for vpn-route
+;
+; Each section is a config group.
+;
+; Example:
+;
+; [gfw]
+; server = vpn.example.com
+; gateway = 192.168.199.1
+; routing = remote
+; segment = 192.168.108.0/24
+; segment_file = segment_gfw
+;
+; Notes:
+;   1. Section name must be unique
+;   2. Server names only use for noting, not using in scripts
+;   3. Gateway need to fill the default gateway of ppp0/ppp1/... after you
+;      connected to the VPN, you can use command 'netstat -nr' to find it.
+;      Due to limitation of ip-up/ip-down scripts, we can only use gateway to
+;      distinguish different VPNs, so the remote gateway must be unique.
+;   4. Routing could be 'local' or 'remote'. 'local' means send all traffic
+;      via vpn (need to check 'send all traffic over VPN connection' option
+;      in VPN advanced profile), and want to add some exceptions still via
+;      local gateway. 'remote' means the opposite.
+;   5. Few network segments can be placed in segment option.
+;   6. Large amount of segments can be placed in several separate files, one
+;      line one segment (comments start with #).
+;   7. All options except routing could be multiple values splitted by comma.
+;
+; Format Checker:
+;   ./vpn-route check_ini
+;
+
+[gfw]
+server = vpn.example.com
+gateway = 192.168.199.1, 192.168.155.1
+routing = local
+segment = 192.168.108.0/24
+segment_file = segment_gfw

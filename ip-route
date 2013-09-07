@@ -1,0 +1,165 @@
+#!/usr/bin/env python
+
+import sys
+import ConfigParser
+from os import popen, path, getuid
+
+CURR_FILE = path.realpath(__file__)
+CURR_DIR = path.dirname(CURR_FILE)
+
+IP_DIR = '/etc/ppp'
+IP_SCRIPT_CONTENT = '''\
+#!/usr/bin/env python
+
+import sys
+import os
+
+if __name__ == '__main__':
+    gateway = os.environ['IPREMOTE']
+    cmd = 'python /etc/ppp/ip-route {} ' + gateway
+    try:
+        os.system(cmd)
+        sys.exit(0)
+    except Exception:
+        sys.exit(1)
+'''
+
+
+def _exec_cmd(cmd):
+    return popen(cmd).readline()[:-1]
+
+
+def _get_array(s):
+    return s.replace(' ', '').split(',') if s else []
+
+
+def _get_local_gateway():
+    cmd = r'/usr/sbin/netstat -nr' \
+          r' | grep "^default.*en0"' \
+          r' | sed "s;^default *\([0-9\.]*\) .*$;\1;"'
+    return _exec_cmd(cmd)
+
+
+def _load_ini():
+    cf = ConfigParser.ConfigParser()
+    cf.read(path.join(CURR_DIR, 'ip-route.ini'))
+
+    ini = {}
+    for section in cf.sections():
+        ini[section] = {
+            'name': section,
+            'server': _get_array(cf.get(section, 'server')),
+            'gateway': _get_array(cf.get(section, 'gateway')),
+            'routing': cf.get(section, 'routing'),
+            'segment': _get_array(cf.get(section, 'segment')),
+            'segment_file': _get_array(cf.get(section, 'segment_file'))
+        }
+    return ini
+
+
+def _load_conf_by_name(name):
+    return _load_ini().get(name, None)
+
+
+def _load_conf_by_gateway(gateway):
+    for name, conf in _load_ini().iteritems():
+        if gateway in conf['gateway']:
+            return conf
+    return None
+
+
+def _get_segments(conf):
+    segs = conf['segment']
+
+    for segfile in conf['segment_file']:
+        if segfile[0] != '/':
+            segfile = path.join(CURR_DIR, segfile)
+        with open(segfile) as f:
+            while True:
+                seg = f.readline().strip()
+                if not seg:
+                    break
+                if seg[0] == '#':
+                    continue
+                segs.append(seg)
+
+    return segs
+
+
+def ip_up(gateway):
+    conf = _load_conf_by_gateway(gateway)
+    if not conf:
+        return
+
+    if conf['routing'] == 'local':
+        gateway = _get_local_gateway()
+
+    cmd = ''
+    for seg in _get_segments(conf):
+        cmd += '/sbin/route add {} {}\n'.format(seg, gateway)
+
+    _exec_cmd(cmd)
+
+
+def ip_down(gateway):
+    conf = _load_conf_by_gateway(gateway)
+    if not conf:
+        return
+
+    cmd = ''
+    for seg in _get_segments(conf):
+        cmd += '/sbin/route delete {}\n'.format(seg)
+
+    _exec_cmd(cmd)
+
+
+def ip_install():
+    # Empty IP_DIR
+    _exec_cmd('rm -rf {}/*'.format(IP_DIR))
+
+    # Copy file to IP_DIR
+    cmd = 'cp -f {0}/{2} {1}/{2}'
+    files = ['ip-route', 'ip-route.ini.sample', 'segment_gfw']
+    for f in files:
+        _exec_cmd(cmd.format(CURR_DIR, IP_DIR, f))
+
+    # Rename config sample file
+    _exec_cmd('mv {0}/ip-route.ini.sample {0}/ip-route.ini'.format(IP_DIR))
+
+    file_up = path.join(IP_DIR, 'ip-up')
+    file_down = path.join(IP_DIR, 'ip-down')
+
+    # Generate new ip-up / ip-down
+    with open(file_up, 'w') as fu, open(file_down, 'w') as fd:
+        fu.write(IP_SCRIPT_CONTENT.format('up'))
+        fd.write(IP_SCRIPT_CONTENT.format('down'))
+
+    # Set execute permission
+    cmd = 'chmod a+x {}'
+    if path.exists(file_up):
+        _exec_cmd(cmd.format(file_up))
+    if path.exists(file_down):
+        _exec_cmd(cmd.format(file_down))
+
+
+def ip_uninstall():
+    # Empty IP_DIR
+    _exec_cmd('rm -rf {}/*'.format(IP_DIR))
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        sys.exit('Execution FAILED: missing argument')
+
+    op = sys.argv[1]
+    fn = 'ip_{}'.format(op)
+
+    if op == 'up' or op == 'down':
+        if len(sys.argv) < 3:
+            sys.exit('Execution FAILED: missing argument')
+        locals()[fn](sys.argv[2])
+
+    if op == 'install' or op == 'uninstall':
+        if getuid() != 0:
+            sys.exit('Execution FAILED: Must be root')
+        locals()[fn]()

@@ -30,8 +30,8 @@
 ;
 
 [gfw]
-server = vpn.example.com
+server = vpn.example.com, vpn2.example.com
 gateway = 192.168.199.1, 192.168.155.1
 routing = local
-segment = 192.168.108.0/24
+segment =
 segment_file = segment_gfw

@@ -1,7 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
+import re
 import sys
+import math
+import urllib2
 import ConfigParser
+
 from os import popen, path, getuid
 
 CURR_FILE = path.realpath(__file__)
@@ -9,14 +13,14 @@ CURR_DIR = path.dirname(CURR_FILE)
 
 IP_DIR = '/etc/ppp'
 IP_SCRIPT_CONTENT = '''\
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
 import sys
 import os
 
 if __name__ == '__main__':
     gateway = os.environ['IPREMOTE']
-    cmd = 'python /etc/ppp/ip-route {} ' + gateway
+    cmd = '/etc/ppp/ip-route {} ' + gateway
     try:
         os.system(cmd)
         sys.exit(0)
@@ -117,34 +121,72 @@ def ip_install():
     # Empty IP_DIR
     _exec_cmd('rm -rf {}/*'.format(IP_DIR))
 
+    ip_route = path.join(IP_DIR, 'ip-route')
+    ip_route_ini = path.join(IP_DIR, 'ip-route.ini')
+
     # Copy file to IP_DIR
-    cmd = 'cp -f {0}/{2} {1}/{2}'
-    files = ['ip-route', 'ip-route.ini.sample', 'segment_gfw']
-    for f in files:
-        _exec_cmd(cmd.format(CURR_DIR, IP_DIR, f))
+    cmd = 'cp -f {0}/{1} {2}'
+    _exec_cmd(cmd.format(CURR_DIR, 'ip-route', ip_route))
+    _exec_cmd(cmd.format(CURR_DIR, 'ip-route.ini.sample', ip_route_ini))
 
-    # Rename config sample file
-    _exec_cmd('mv {0}/ip-route.ini.sample {0}/ip-route.ini'.format(IP_DIR))
-
-    file_up = path.join(IP_DIR, 'ip-up')
-    file_down = path.join(IP_DIR, 'ip-down')
+    ip_up = path.join(IP_DIR, 'ip-up')
+    ip_down = path.join(IP_DIR, 'ip-down')
 
     # Generate new ip-up / ip-down
-    with open(file_up, 'w') as fu, open(file_down, 'w') as fd:
+    with open(ip_up, 'w') as fu, open(ip_down, 'w') as fd:
         fu.write(IP_SCRIPT_CONTENT.format('up'))
         fd.write(IP_SCRIPT_CONTENT.format('down'))
 
     # Set execute permission
-    cmd = 'chmod a+x {}'
-    if path.exists(file_up):
-        _exec_cmd(cmd.format(file_up))
-    if path.exists(file_down):
-        _exec_cmd(cmd.format(file_down))
+    _exec_cmd('chmod a+x {} {} {}'.format(ip_up, ip_down, ip_route))
 
 
 def ip_uninstall():
     # Empty IP_DIR
     _exec_cmd('rm -rf {}/*'.format(IP_DIR))
+
+
+######
+# Reference:
+# https://github.com/fivesheep/chnroutes
+###
+def ip_fetch_gfw_segment():
+    # Fetch data from apnic
+    print 'Fetching data from apnic.net, please wait...'
+    url = r'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
+    data = urllib2.urlopen(url).read()
+
+    cnregex = re.compile(r'apnic\|cn\|ipv4\|[0-9\.]+\|[0-9]+\|[0-9]+\|a.*',
+                         re.IGNORECASE)
+    cndata = cnregex.findall(data)
+
+    results = []
+
+    for item in cndata:
+        unit_items = item.split('|')
+        starting_ip = unit_items[3]
+        num_ip = int(unit_items[4])
+
+        imask = 0xffffffff ^ (num_ip - 1)
+
+        # Convert to string
+        imask = hex(imask)[2:]
+        mask = [0]*4
+        mask[0] = imask[0:2]
+        mask[1] = imask[2:4]
+        mask[2] = imask[4:6]
+        mask[3] = imask[6:8]
+
+        # Mask in *nix format
+        mask = 32 - int(math.log(num_ip, 2))
+
+        results.append('{}/{}'.format(starting_ip, mask))
+
+    segfile = path.join(CURR_DIR, 'segment_gfw')
+    with open(segfile, 'w') as f:
+        f.write('\n'.join(results))
+
+    print 'Done...'
 
 
 if __name__ == '__main__':
@@ -163,3 +205,6 @@ if __name__ == '__main__':
         if getuid() != 0:
             sys.exit('Execution FAILED: Must be root')
         locals()[fn]()
+
+    if op == 'fetch_gfw_segment':
+        ip_fetch_gfw_segment()

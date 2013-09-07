@@ -1,10 +1,10 @@
-VPN auto routing scripts
+VPN auto routing scripts - for Mac OS X
 ==========================
 
 1. Install
 
     ```shell
-    sudo python ip-route install
+    sudo ./ip-route install
     ```
 
 1. Edit configuration
@@ -14,7 +14,11 @@ VPN auto routing scripts
 1. Uninstall
 
     ```shell
-    sudo python ip-route uninstall
+    sudo ./ip-route uninstall
     ```
 
+1. Fetch gfw segments
 
+    ```shell
+    sudo ./ip-route fetch_gfw_segment
+    ```

@@ -28,9 +28,6 @@
 ;      line one segment (comments start with #).
 ;   7. All options except routing could be multiple values splitted by comma.
 ;
-; Format Checker:
-;   ./vpn-route check_ini
-;
 
 [gfw]
 server = vpn.example.com
